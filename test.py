@@ -1,28 +1,42 @@
+from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 import requests
-from datetime import datetime
+import time
 
-ro = requests.get('http://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=97e711e0e761419e89d0ee28c76f0ef5&mapid=40670')
-rf = requests.get('http://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=97e711e0e761419e89d0ee28c76f0ef5&mapid=40220')
-ror = ET.fromstring(ro.text)
-rfr = ET.fromstring(rf.text)
-all_times = []
-print(f"Next O'Hare Branch (Northwest) trains:")
-today = datetime.today()
-for i, train in enumerate(ror.findall('eta')):
-    time = train.find('arrT').text.split(' ')[-1]
-    time = datetime.strptime(time, '%H:%M:%S').time()
-    dt = datetime.combine(today, time)
-    all_times.append([dt, 'o'])
-    print(f"#{i+1} - {time}")
-print(f"Next FP Branch (Southeast) trains:")
-for i, train in enumerate(rfr.findall('eta')):
-    time = train.find('arrT').text.split(' ')[-1]
-    time = datetime.strptime(time, '%H:%M:%S').time()
-    dt = datetime.combine(today, time)
-    all_times.append([dt, 'f'])
-    print(f"#{i+1} - {time}")
-next_train = min(all_times, key=lambda x: x[0])
-next_train_time = next_train[0] - datetime.now()
-next_train_direction = "O'Hare" if next_train[1] == 'o' else 'FP'
-print(f"Next train in: {next_train_time} seconds heading towards {next_train_direction}")
+
+TODAY = datetime.today()
+OSTRING = "Western (O'Hare Branch)"
+
+
+def extract_times(queue: list, element: ET):
+    stop_name = element.find('eta').find('staNm').text
+    # print(f"Next {stop_name} trains:")
+    for i, train in enumerate(element.findall('eta')):
+        time = train.find('arrT').text.split(' ')[-1]
+        time = datetime.strptime(time, '%H:%M:%S').time()
+        dt = datetime.combine(TODAY, time)
+        queue.append([dt, stop_name])
+        # print(f"#{i+1} - {time}")
+    return queue
+
+
+def main():
+    while True:
+        ro = requests.get('http://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=97e711e0e761419e89d0ee28c76f0ef5&mapid=40670')
+        rf = requests.get('http://lapi.transitchicago.com/api/1.0/ttarrivals.aspx?key=97e711e0e761419e89d0ee28c76f0ef5&mapid=40220')
+        ror = ET.fromstring(ro.text)
+        rfr = ET.fromstring(rf.text)
+        all_times = []
+
+        all_times = extract_times(all_times, ror)
+        all_times = extract_times(all_times, rfr)
+
+        next_train = min(all_times, key=lambda x: x[0])
+        next_train_time = next_train[0] - datetime.now() + timedelta(hours=0, minutes=0, seconds=20) if next_train[1] == OSTRING else next_train[0] - datetime.now() - timedelta(hours=0, minutes=0, seconds=20)
+        next_train_direction = "O'Hare" if next_train[1] == OSTRING else 'FP'
+        print(f"Next train in: {next_train_time} heading towards {next_train_direction}")
+        time.sleep(5)
+
+
+if __name__ == "__main__":
+    main()
